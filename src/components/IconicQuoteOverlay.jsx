@@ -83,11 +83,12 @@ const IconicQuoteOverlay = () => {
     
     // 🎬 Fetch TMDB fan art (non-blocking)
     useEffect(() => {
-        const FANART_KEY = "969107ea3b364def2d46c07af3da3245";
+        const FANART_KEY = "cf862773b90fd45c922fc9ca16ad49b2";
+        const BASE_URL = "https://webservice.fanart.tv/v3.2/movies";
         
         const fetchFanArt = async (imdbID = null) => {
             try {
-                // ⚡ 1. Cache (instant UX)
+                // ⚡ 1. Cache first
                 const cached = sessionStorage.getItem("cinema_bg");
                 if (cached) {
                     setFanArt(cached);
@@ -96,56 +97,48 @@ const IconicQuoteOverlay = () => {
                 
                 let backdrop = null;
                 
-                // 🎬 2. Use passed movie (BEST CASE)
-                if (imdbID) {
-                    const res = await fetch(
-                        `https://webservice.fanart.tv/v3.2/movies/${imdbID}?api_key=${FANART_KEY}`
-                    );
+                // 🎬 2. Pick IMDb ID
+                const IMDB_POOL = [
+                    "tt1375666", // Inception
+                    "tt0816692", // Interstellar
+                    "tt0468569", // Dark Knight
+                    "tt0111161", // Shawshank
+                    "tt0133093", // Matrix
+                ];
+                
+                const id = imdbID || IMDB_POOL[Math.floor(Math.random() * IMDB_POOL.length)];
+                
+                const res = await fetch(
+                    `${BASE_URL}/${id}?api_key=${FANART_KEY}`
+                );
+                
+                const data = await res.json();
+                
+                // 🔥 3. PRIORITY: hdmovieclearart (transparent cinematic overlay)
+                if (data?.hdmovieclearart?.length > 0) {
+                    const sorted = data.hdmovieclearart
+                    .filter(img => img.lang === "en")
+                    .sort((a, b) => Number(b.likes) - Number(a.likes));
                     
-                    const data = await res.json();
-                    
-                    if (data?.moviebackground?.length > 0) {
-                        const images = data.moviebackground;
-                        
-                        const img = images[Math.floor(Math.random() * images.length)];
-                        backdrop = img.url;
-                    }
+                    backdrop = sorted[0]?.url;
                 }
                 
-                // 🔁 3. Fallback → curated IMDb list
-                if (!backdrop) {
-                    const IMDB_POOL = [
-                        "tt1375666", // Inception
-                        "tt0816692", // Interstellar
-                        "tt0468569", // Dark Knight
-                        "tt0111161", // Shawshank
-                        "tt0133093", // Matrix
-                    ];
+                // 🔁 4. FALLBACK: moviebackground
+                if (!backdrop && data?.moviebackground?.length > 0) {
+                    const sorted = data.moviebackground
+                    .sort((a, b) => Number(b.likes) - Number(a.likes));
                     
-                    const randomID =
-                    IMDB_POOL[Math.floor(Math.random() * IMDB_POOL.length)];
-                    
-                    const res = await fetch(
-                        `https://webservice.fanart.tv/v3/movies/${randomID}?api_key=${FANART_KEY}`
-                    );
-                    
-                    const data = await res.json();
-                    
-                    if (data?.moviebackground?.length > 0) {
-                        const images = data.moviebackground;
-                        backdrop =
-                        images[Math.floor(Math.random() * images.length)].url;
-                    }
+                    backdrop = sorted[0]?.url;
                 }
                 
-                // 🛡️ 4. Final safety
+                // 🛡️ 5. Final safety
                 if (backdrop) {
                     setFanArt(backdrop);
                     sessionStorage.setItem("cinema_bg", backdrop);
                 }
                 
             } catch (err) {
-                console.log("Fanart fallback used", err);
+                console.log("FanArt fetch failed", err);
             }
         };
         
