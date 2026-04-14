@@ -99,7 +99,7 @@ const IconicQuoteOverlay = () => {
                 // 🎬 2. Use passed movie (BEST CASE)
                 if (imdbID) {
                     const res = await fetch(
-                        `https://webservice.fanart.tv/v3/movies/${imdbID}?api_key=${FANART_KEY}`
+                        `https://webservice.fanart.tv/v3.2/movies/${imdbID}?api_key=${FANART_KEY}`
                     );
                     
                     const data = await res.json();
