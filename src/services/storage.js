@@ -1,30 +1,43 @@
 import { openDB } from 'idb';
 
-const DB_NAME = 'CinemaVault';
-const STORE_NAME = 'movies';
+const DB_NAME = 'cinema-db';
 
 export const initDB = async () => {
   return openDB(DB_NAME, 1, {
     upgrade(db) {
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'imdbID' });
-        store.createIndex('status', 'status'); // 'watchlist', 'stayed', 'faded'
-      }
+      db.createObjectStore('movies', { keyPath: 'imdbID' });
+      db.createObjectStore('status', { keyPath: 'movieId' });
+      db.createObjectStore('notes', { keyPath: 'movieId' });
     },
   });
 };
 
-export const movieStorage = {
-  async save(movie) {
+export const dbService = {
+  // Movies
+  async saveMovie(movie) {
     const db = await initDB();
-    return db.put(STORE_NAME, movie);
+    await db.put('movies', movie);
   },
-  async getAll() {
+  async getMovie(id) {
     const db = await initDB();
-    return db.getAll(STORE_NAME);
+    return db.get('movies', id);
   },
-  async delete(id) {
+  // Status (Watchlist/Watched/Skipped)
+  async updateStatus(movieId, state) {
     const db = await initDB();
-    return db.delete(STORE_NAME, id);
+    await db.put('status', { movieId, state, updated: Date.now() });
+  },
+  async getStatus(movieId) {
+    const db = await initDB();
+    return db.get('status', movieId);
+  },
+  // Aftertaste Notes
+  async saveNote(note) {
+    const db = await initDB();
+    await db.put('notes', { ...note, timestamp: Date.now() });
+  },
+  async getNote(movieId) {
+    const db = await initDB();
+    return db.get('notes', movieId);
   }
 };
