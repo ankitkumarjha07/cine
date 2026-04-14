@@ -1,115 +1,124 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
 import { Quote } from 'lucide-react';
 
-// 1. Unified Master List: Quote + Movie Name + IMDb ID
 const CINEMA_VAULT = [
-    // Hindi
-    { text: "रिश्ते में तो हम तुम्हारे बाप लगते हैं.", movie: "Shahenshah", id: "tt0096087" },
-    { text: "डॉन को पकड़ना मुश्किल ही नहीं, नामुमकिन है.", movie: "Don", id: "tt0077451" },
-    { text: "मोगैम्बो खुश हुआ.", movie: "Mr. India", id: "tt0093575" },
-    { text: "पिक्चर अभी बाकी है मेरे दोस्त.", movie: "Om Shanti Om", id: "tt1023432" },
-    { text: "ये हाथ मुझे दे दे ठाकुर.", movie: "Sholay", id: "tt0073707" },
-    { text: "बाबूमोशाय, ज़िंदगी बड़ी होनी चाहिए, लंबी नहीं.", movie: "Anand", id: "tt0066763" },
-    { text: "पहन के शेरवानी, कहाँ चले?", movie: "Tumbbad", id: "tt5986346" },
-    { text: "काबिल बनो, कामयाबी झक मार के पीछे आएगी.", movie: "3 Idiots", id: "tt1187043" },
-    { text: "मैं अपनी फेवरेट हूँ.", movie: "Jab We Met", id: "tt1093824" },
-    
-    // English
+    { text: "It does not do to dwell on dreams and forget to live.", movie: "Harry Potter and the Sorcerer's Stone", id: "tt0241927" },
+    { text: "Happiness can be found, even in the darkest of times...", movie: "Harry Potter and the Prisoner of Azkaban", id: "tt0304141" },
+    { text: "After all this time? Always.", movie: "Harry Potter and the Deathly Hallows: Part 2", id: "tt1201607" },
     { text: "I am your father.", movie: "Star Wars: Empire Strikes Back", id: "tt0080684" },
+    { text: "All we have to decide is what to do with the time that is given us.", movie: "LOTR: The Fellowship of the Ring", id: "tt0120737" },
+    { text: "I can only show you the door. You're the one that has to walk through it.", movie: "The Matrix", id: "tt0133093" },
     { text: "Why so serious?", movie: "The Dark Knight", id: "tt0468569" },
     { text: "I'm going to make him an offer he can't refuse.", movie: "The Godfather", id: "tt0068646" },
-    { text: "To infinity and beyond!", movie: "Toy Story", id: "tt0114709" },
-    { text: "There's no place like home.", movie: "The Wizard of Oz", id: "tt0032138" },
-    { text: "Keep your friends close, but your enemies closer.", movie: "The Godfather II", id: "tt0071562" },
     { text: "It's only after we've lost everything that we're free.", movie: "Fight Club", id: "tt0137523" },
-    { text: "May the Force be with you.", movie: "Star Wars", id: "tt0076759" },
-    { text: "Here's looking at you, kid.", movie: "Casablanca", id: "tt0034583" },
-    { text: "Life is like a box of chocolates.", movie: "Forrest Gump", id: "tt0109830" }
+    { text: "Get busy living or get busy dying.", movie: "Shawshank Redemption", id: "tt0111161" },
+    { text: "Carpe diem. Seize the day.", movie: "Dead Poets Society", id: "tt0097165" },
+    { text: "Stories are how we make sense of the world.", movie: "Inception", id: "tt1375666" }
 ];
 
-const IMAGE_POOL = [
-    'https://images.unsplash.com/photo-1478720568477-152d9b164e26',
-    'https://images.unsplash.com/photo-1485846234645-a62644f84728'
-];
+// High-quality static fallback used while high-res art loads
+const MASTER_FALLBACK = 'https://images.unsplash.com/photo-1478720568477-152d9b164e26?q=80&w=1200&auto=format&fit=crop';
 
 const IconicQuoteOverlay = () => {
-    const [fanArt, setFanArt] = useState(null);
+    // 1. Instantly pick the movie
+    const entry = useMemo(() => CINEMA_VAULT[Math.floor(Math.random() * CINEMA_VAULT.length)], []);
+    
+    // 2. AGGRESSIVE INITIALIZATION: Check localStorage immediately during render
+    const [bgImage, setBgImage] = useState(() => {
+        if (typeof window === 'undefined') return null;
+        return localStorage.getItem(`cinema_art_cache_${entry.id}`);
+    });
 
-    // 2. Select ONE entry from the vault per refresh
-    const entry = useMemo(() => {
-        return CINEMA_VAULT[Math.floor(Math.random() * CINEMA_VAULT.length)];
-    }, []);
-
-    const fallbackBg = useMemo(() => IMAGE_POOL[Math.floor(Math.random() * IMAGE_POOL.length)], []);
+    const [isArtReady, setIsArtReady] = useState(!!bgImage);
+    const fetchRef = useRef(false);
 
     useEffect(() => {
-        const fetchMatchingArt = async () => {
+        // If we have it in localStorage, don't even trigger the fetch logic
+        if (bgImage) return; 
+        if (fetchRef.current) return;
+        fetchRef.current = true;
+
+        const loadArt = async () => {
+            const id = entry.id;
+            const cacheKey = `cinema_art_cache_${id}`;
+
             try {
-                // 3. Use the ID directly from our selected entry
-                const id = entry.id;
-
-                const cached = sessionStorage.getItem(`cinema_art_${id}`);
-                if (cached) {
-                    setFanArt(cached);
-                    return;
-                }
-
                 const res = await fetch(`/.netlify/functions/getFanArt?id=${id}`);
                 const data = await res.json();
-
-                let backdrop = null;
-
-                // Priority Logic
+                
+                let rawUrl = null;
                 if (data?.moviebackground?.length > 0) {
-                    const sorted = data.moviebackground.sort((a, b) => Number(b.likes) - Number(a.likes));
-                    backdrop = sorted[0]?.url;
+                    rawUrl = data.moviebackground.sort((a, b) => b.likes - a.likes)[0].url;
                 } else if (data?.movieposter?.length > 0) {
-                    backdrop = data.movieposter[0]?.url;
+                    rawUrl = data.movieposter[0].url;
                 }
 
-                if (backdrop) {
-                    setFanArt(backdrop);
-                    sessionStorage.setItem(`cinema_art_${id}`, backdrop);
+                if (rawUrl) {
+                    // Preload the image in background
+                    const img = new Image();
+                    img.src = rawUrl;
+                    img.onload = () => {
+                        localStorage.setItem(cacheKey, rawUrl);
+                        setBgImage(rawUrl);
+                        setIsArtReady(true);
+                    };
                 }
-            } catch (err) {
-                console.error("Art fetch failed", err);
+            } catch (e) {
+                console.error("Fetch failed, staying on fallback");
             }
         };
 
-        fetchMatchingArt();
-    }, [entry]); // Dependency on entry ensures it runs when the entry is picked
-
-    const bg = fanArt || `${fallbackBg}?q=80&w=1200&auto=format&fit=crop`;
+        loadArt();
+    }, [entry, bgImage]);
 
     return (
-        <div className="relative w-full aspect-[21/10] min-h-[320px] rounded-[2.5rem] overflow-hidden bg-[#121217] border border-white/5 shadow-2xl group">
-            {/* 🎬 Background */}
-            <img
-                src={bg}
-                key={bg} // Force re-animation on change
-                className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-[5000ms] ease-out"
-                alt={entry.movie}
+        <div className="relative w-full aspect-[21/10] min-h-[320px] rounded-[2.5rem] overflow-hidden bg-[#0a0a0c] border border-white/5 shadow-2xl">
+            
+            {/* LAYER 1: Immediate Fallback (Always visible, very low opacity) */}
+            <div 
+                className="absolute inset-0 opacity-20"
+                style={{
+                    backgroundImage: `url(${MASTER_FALLBACK})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                }}
             />
+
+            {/* LAYER 2: The Cinematic Art (Fades in over fallback once ready) */}
+            <div 
+                className={`absolute inset-0 transition-opacity duration-1000 ease-out ${isArtReady ? 'opacity-40' : 'opacity-0'}`}
+                style={{
+                    backgroundImage: `url(${bgImage})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    filter: 'contrast(1.1) brightness(0.8)'
+                }}
+            />
+
+            {/* VIGNETTE & GRADIENTS (Instant) */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-transparent to-black/90" />
             
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-black/60" />
-            
-            <div className="relative h-full flex flex-col justify-center px-8 md:px-14">
-                <div className="space-y-5">
-                    <Quote size={26} className="text-yellow-400/40" />
-                    <div className="max-w-[90%]">
-                        <p className="text-xl md:text-3xl font-medium text-white/90 leading-[1.2] tracking-tight">
+            {/* CONTENT (Instant) */}
+            <div className="relative h-full flex flex-col justify-center px-8 md:px-16">
+                <div className="space-y-6">
+                    <Quote size={28} className="text-yellow-400/30" />
+                    <div className="max-w-[85%]">
+                        <p className="text-2xl md:text-4xl font-medium text-white leading-[1.15] tracking-tight drop-shadow-2xl">
                             {entry.text}
                         </p>
-                        <div className="flex items-center gap-3 mt-6">
-                            <div className="h-px w-8 bg-yellow-400/30" />
-                            <p className="text-[10px] md:text-xs uppercase tracking-[0.3em] text-yellow-400/60 italic">
+                        <div className="flex items-center gap-4 mt-8">
+                            <div className="h-[1px] w-12 bg-gradient-to-r from-yellow-400/50 to-transparent" />
+                            <p className="text-[10px] md:text-xs uppercase tracking-[0.4em] text-yellow-400/60 font-bold italic">
                                 {entry.movie}
                             </p>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Noise/Grain (Instant) */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
         </div>
     );
 };
