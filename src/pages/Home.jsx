@@ -97,14 +97,6 @@ const Home = () => {
             >
                 सिनेमा
             </h1>
-            {activeTab === 'home' && (
-                <motion.p 
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
-                    className="mt-4 text-[9px] uppercase tracking-[0.4em] text-[#D4AF37]/50 font-light"
-                >
-                    Personal Cinema
-                </motion.p>
-            )}
         </motion.div>
         
         <main className="flex-1 relative h-full w-full">
